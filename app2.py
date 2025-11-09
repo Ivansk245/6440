@@ -2,21 +2,22 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
-from modelcsv import train_model_from_csv
 import os
 from PIL import Image
+from modelcsv import train_models_from_csv, predict_propensity  
 
 BASE_DIR = os.path.dirname(__file__)
 patients_csv = os.path.join(BASE_DIR, "csv", "patients.csv")
 medications_csv = os.path.join(BASE_DIR, "csv", "medications.csv")
 
 st.set_page_config(page_title="Propensity Score Calculator", layout="centered")
-
 st.title("Propensity Score Calculator")
+
 st.warning(
     "These propensity scores are based on synthetic data from CSVs, not real patients. "
     "Changing age and sex affects predictions based on the model trained on fake data."
 )
+
 st.markdown(
     "**Propensity Score** is the likelihood of a certain medication prescribed to an individual based on their characteristics. "
     "This tool aims to estimate these propensity scores when an individual inputs some of their demographics like age and sex. "
@@ -25,7 +26,6 @@ st.markdown(
     "<span style='color:red; font-weight:bold;'>this is not medical advice.</span>",
     unsafe_allow_html=True
 )
-
 
 if "diagnosis" not in st.session_state:
     st.session_state.diagnosis = ""
@@ -40,11 +40,11 @@ def get_medications_from_csv(diagnosis):
     return meds
 
 @st.cache_resource
-def get_trained_model():
-    model, df, meds_seen = train_model_from_csv(patients_csv, medications_csv)
-    return model, df, meds_seen
+def get_trained_models():
+    tier_models, df, meds_seen = train_models_from_csv(patients_csv, medications_csv)
+    return tier_models, df, meds_seen
 
-model, df, meds_seen = get_trained_model()
+tier_models, df, meds_seen = get_trained_models()
 
 diagnosis_input = st.text_input("Enter your diagnosis (e.g., hypertension):").strip()
 
@@ -53,8 +53,8 @@ if diagnosis_input != st.session_state.diagnosis:
     st.session_state.meds = get_medications_from_csv(diagnosis_input)
 
 meds = st.session_state.meds
-
 st.write(f"Found {len(meds)} medications for `{diagnosis_input}`")
+
 if meds:
     st.write(meds)
 else:
@@ -69,19 +69,9 @@ if meds:
     sex_map = {"Male": 0, "Female": 1, "Other": 0.5}
     patient_features = [age, sex_map[sex], num_conditions]
 
-    try:
-        med_classes_in_model = [m for m in meds if m in model.classes_]
-        if med_classes_in_model:
-            med_scores_full = model.predict_proba([patient_features])[0]
-            med_classes = model.classes_
-            med_scores = [med_scores_full[list(med_classes).index(m)] for m in med_classes_in_model]
-            results = pd.DataFrame({
-                "Medication": med_classes_in_model,
-                "PropensityScore": med_scores
-            }).sort_values("PropensityScore", ascending=False)
-        else:
-            raise ValueError("No medications in model")
-    except:
+    results = predict_propensity(st.session_state.diagnosis, patient_features, tier_models)
+
+    if results is None:
         np.random.seed()
         scores = np.random.rand(len(meds))
         scores = scores / scores.sum()
@@ -101,8 +91,6 @@ if meds:
 
     st.subheader("Detailed Scores")
     st.dataframe(results)
-
-BASE_DIR = os.path.dirname(__file__)
 
 logo1 = os.path.join(BASE_DIR, "gatech.png")
 logo2 = os.path.join(BASE_DIR, "synthea.png")
