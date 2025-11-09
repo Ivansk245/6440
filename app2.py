@@ -4,6 +4,7 @@ import numpy as np
 import altair as alt
 from modelcsv import train_model_from_csv
 import os
+from PIL import Image
 
 BASE_DIR = os.path.dirname(__file__)
 patients_csv = os.path.join(BASE_DIR, "csv", "patients.csv")
@@ -99,3 +100,16 @@ if meds:
 
     st.subheader("Detailed Scores")
     st.dataframe(results)
+
+BASE_DIR = os.path.dirname(__file__)
+
+logo1 = os.path.join(BASE_DIR,  "gatech.png")
+logo2 = os.path.join(BASE_DIR,  "synthea.png")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.image(logo1, use_column_width=True)
+
+with col2:
+    st.image(logo2, use_column_width=True)
