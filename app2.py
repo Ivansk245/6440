@@ -9,17 +9,19 @@ BASE_DIR = os.path.dirname(__file__)
 patients_csv = os.path.join(BASE_DIR, "csv", "patients.csv")
 medications_csv = os.path.join(BASE_DIR, "csv", "medications.csv")
 
-st.set_page_config(page_title="Medication Recommendation Tool (CSV)", layout="centered")
+st.set_page_config(page_title="Propensity Score Calculator", layout="centered")
 
-st.title("Medication Recommendation Tool (CSV)")
+st.title("Propensity Score Calculator")
 st.warning(
     "These propensity scores are based on synthetic data from CSVs, not real patients. "
     "Changing age and sex affects predictions based on the model trained on fake data."
 )
 st.write(
     """
-    This tool estimates which medications are most commonly prescribed for a given diagnosis
-    based on patient characteristics. **This is not medical advice.**
+    **Propensity Score** is the likelihood of a certain medication prescribed to an individual based on their characteristics. This tool aims to estimate
+    these propensity scores when an individual inputs some of their demographics like age and sex. This tool currently utilizes ficitional but realistic
+    patient data to model the results. We hope this tool guides users in the right direction in terms of their treatment but users should keep in mind that
+    this is not medical advice.
     """
 )
 
