@@ -17,14 +17,15 @@ st.warning(
     "These propensity scores are based on synthetic data from CSVs, not real patients. "
     "Changing age and sex affects predictions based on the model trained on fake data."
 )
-st.write(
-    """
-    **Propensity Score** is the likelihood of a certain medication prescribed to an individual based on their characteristics. This tool aims to estimate
-    these propensity scores when an individual inputs some of their demographics like age and sex. This tool currently utilizes ficitional but realistic
-    patient data to model the results. We hope this tool guides users in the right direction in terms of their treatment but users should keep in mind that
-    this is not medical advice.
-    """
+st.markdown(
+    "**Propensity Score** is the likelihood of a certain medication prescribed to an individual based on their characteristics. "
+    "This tool aims to estimate these propensity scores when an individual inputs some of their demographics like age and sex. "
+    "This tool currently utilizes fictional but realistic patient data to model the results. "
+    "We hope this tool guides users in the right direction in terms of their treatment, but users should keep in mind that "
+    "<span style='color:red; font-weight:bold;'>this is not medical advice.</span>",
+    unsafe_allow_html=True
 )
+
 
 if "diagnosis" not in st.session_state:
     st.session_state.diagnosis = ""
@@ -103,13 +104,13 @@ if meds:
 
 BASE_DIR = os.path.dirname(__file__)
 
-logo1 = os.path.join(BASE_DIR,  "gatech.png")
-logo2 = os.path.join(BASE_DIR,  "synthea.png")
+logo1 = os.path.join(BASE_DIR, "gatech.png")
+logo2 = os.path.join(BASE_DIR, "synthea.png")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.image(logo1, use_column_width=True)
+    st.image(logo1, use_container_width=True)
 
 with col2:
-    st.image(logo2, use_column_width=True)
+    st.image(logo2, use_container_width=True)
