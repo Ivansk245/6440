@@ -19,7 +19,7 @@ st.warning(
 st.markdown(
     "**Propensity Score** is the likelihood of a certain medication prescribed to an individual based on their characteristics. "
     "This tool aims to estimate these propensity scores when an individual inputs some of their demographics like age and sex. "
-    "This tool currently utilizes fictional but realistic patient data to model the results. "
+    "This tool currently utilizes fictional but realistic patient data courtesy of Synthea® to model the results. "
     "We hope this tool guides users in the right direction in terms of their treatment, but users should keep in mind that "
     "<span style='color:red; font-weight:bold;'>this is not medical advice.</span>",
     unsafe_allow_html=True
