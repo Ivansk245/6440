@@ -4,7 +4,7 @@ import numpy as np
 import altair as alt
 import os
 from PIL import Image
-from modelcsv import train_models_from_csv, predict_propensity  
+from modelcsv import train_models_from_csv, predict_propensity
 
 BASE_DIR = os.path.dirname(__file__)
 patients_csv = os.path.join(BASE_DIR, "csv", "patients.csv")
@@ -12,12 +12,10 @@ medications_csv = os.path.join(BASE_DIR, "csv", "medications.csv")
 
 st.set_page_config(page_title="Propensity Score Calculator", layout="centered")
 st.title("Propensity Score Calculator")
-
 st.warning(
     "These propensity scores are based on synthetic data from CSVs, not real patients. "
     "Changing age and sex affects predictions based on the model trained on fake data."
 )
-
 st.markdown(
     "**Propensity Score** is the likelihood of a certain medication prescribed to an individual based on their characteristics. "
     "This tool aims to estimate these propensity scores when an individual inputs some of their demographics like age and sex. "
@@ -54,7 +52,6 @@ if diagnosis_input != st.session_state.diagnosis:
 
 meds = st.session_state.meds
 st.write(f"Found {len(meds)} medications for `{diagnosis_input}`")
-
 if meds:
     st.write(meds)
 else:
@@ -69,36 +66,28 @@ if meds:
     sex_map = {"Male": 0, "Female": 1, "Other": 0.5}
     patient_features = [age, sex_map[sex], num_conditions]
 
-    results = predict_propensity(st.session_state.diagnosis, patient_features, tier_models)
+    results = predict_propensity(diagnosis_input, patient_features, tier_models)
+    if results is not None:
+        st.session_state.results = results
+    else:
+        st.warning("No model available for this diagnosis.")
 
-    if results is None:
-        np.random.seed()
-        scores = np.random.rand(len(meds))
-        scores = scores / scores.sum()
-        results = pd.DataFrame({
-            "Medication": meds,
-            "PropensityScore": scores
-        })
+    if not results.empty:
+        st.subheader("Propensity Scores")
+        chart = alt.Chart(results).mark_bar().encode(
+            x=alt.X('PropensityScore', title='Propensity Score'),
+            y=alt.Y('Medication', sort='-x', title='Medication')
+        )
+        st.altair_chart(chart, use_container_width=True)
 
-    st.session_state.results = results
-
-    st.subheader("Propensity Scores")
-    chart = alt.Chart(results).mark_bar().encode(
-        x=alt.X('PropensityScore', title='Propensity Score'),
-        y=alt.Y('Medication', sort='-x', title='Medication')
-    )
-    st.altair_chart(chart, use_container_width=True)
-
-    st.subheader("Detailed Scores")
-    st.dataframe(results)
+        st.subheader("Detailed Scores")
+        st.dataframe(results)
 
 logo1 = os.path.join(BASE_DIR, "gatech.png")
 logo2 = os.path.join(BASE_DIR, "synthea.png")
 
 col1, col2 = st.columns(2)
-
 with col1:
     st.image(logo1, use_container_width=True)
-
 with col2:
     st.image(logo2, use_container_width=True)

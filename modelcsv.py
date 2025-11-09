@@ -1,16 +1,15 @@
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
 
 def extract_features_from_patient_row(patient_row):
+    """Extract features [age, sex, num_conditions] from a patient row."""
     birthDate = patient_row.get("BIRTHDATE", "2000-01-01")
-    
     try:
         birth_date_parsed = pd.to_datetime(birthDate)
         birth_year = birth_date_parsed.year
     except Exception:
-        birth_year = 2000  
+        birth_year = 2000
 
     age = pd.Timestamp.now().year - birth_year
 
@@ -22,75 +21,59 @@ def extract_features_from_patient_row(patient_row):
     return [age, sex, n_conditions]
 
 def train_models_from_csv(patients_csv="patients.csv", medications_csv="medications.csv"):
+    """Train tiered models for each diagnosis."""
     patients_df = pd.read_csv(patients_csv)
     meds_df = pd.read_csv(medications_csv)
 
+    tier_models = {}
+    meds_seen = set()
+
     merged_df = meds_df.merge(patients_df, on="PATIENT", how="left")
-    diagnosis_counts = merged_df['REASONDESCRIPTION'].value_counts()
 
-    tier_models = {} 
-    meds_seen = set(merged_df['DESCRIPTION'].unique())
+    for diagnosis, group in merged_df.groupby("REASONDESCRIPTION"):
+        meds_counts = group["DESCRIPTION"].value_counts()
+        meds_seen.update(meds_counts.index.tolist())
 
-    for diagnosis, count in diagnosis_counts.items():
-        subset = merged_df[merged_df['REASONDESCRIPTION'] == diagnosis]
-        
-        X = []
-        y = []
-        for _, row in subset.iterrows():
-            features = extract_features_from_patient_row(row)
-            X.append(features)
-            y.append(row['DESCRIPTION'])
-
-        if len(X) == 0:
-            continue
-
-        X = np.array(X)
-        y = np.array(y)
-
-        if count > 1000:
-            model = LogisticRegression(max_iter=1000)
-            model.fit(X, y)
-        elif 100 <= count <= 1000:
-            model = DecisionTreeClassifier()
-            model.fit(X, y)
+        if len(meds_counts) == 1:
+            tier_models[diagnosis] = {"type": "single", "med": meds_counts.index[0]}
+        elif meds_counts.max() < 100:
+            tier_models[diagnosis] = {"type": "frequency", "counts": meds_counts.to_dict()}
         else:
-            model = None  
-
-        tier_models[diagnosis] = {
-            "count": count,
-            "model": model,
-            "X": X,
-            "y": y
-        }
+            X = np.array([extract_features_from_patient_row(row) for _, row in group.iterrows()])
+            y = group["DESCRIPTION"].values
+            model = LogisticRegression(max_iter=1000)
+            try:
+                model.fit(X, y)
+                tier_models[diagnosis] = {"type": "model", "model": model}
+            except ValueError:
+                tier_models[diagnosis] = {"type": "frequency", "counts": meds_counts.to_dict()}
 
     return tier_models, merged_df, list(meds_seen)
 
 def predict_propensity(diagnosis, patient_features, tier_models):
-    info = tier_models.get(diagnosis)
-    if info is None:
-        return None  
+    """Predict propensity scores for a given diagnosis and patient."""
+    if diagnosis not in tier_models:
+        return None
 
-    count = info['count']
-    model = info['model']
+    tier = tier_models[diagnosis]
 
-    if model is not None:
-        probs = model.predict_proba([patient_features])[0]
-        meds = model.classes_
+    if tier["type"] == "single":
         return pd.DataFrame({
-            "Medication": meds,
-            "PropensityScore": probs
+            "Medication": [tier["med"]],
+            "PropensityScore": [1.0]
+        })
+    elif tier["type"] == "frequency":
+        counts = tier["counts"]
+        total = sum(counts.values())
+        return pd.DataFrame({
+            "Medication": list(counts.keys()),
+            "PropensityScore": [v / total for v in counts.values()]
         }).sort_values("PropensityScore", ascending=False)
     else:
-        unique_meds = np.unique(info['y'])
-        if count == 1:
-            return pd.DataFrame({
-                "Medication": unique_meds,
-                "PropensityScore": [1.0]
-            })
-        else:
-            counts = pd.Series(info['y']).value_counts()
-            probs = counts / counts.sum()
-            return pd.DataFrame({
-                "Medication": probs.index,
-                "PropensityScore": probs.values
-            }).sort_values("PropensityScore", ascending=False)
+        model = tier["model"]
+        meds_in_model = model.classes_
+        probs = model.predict_proba([patient_features])[0]
+        return pd.DataFrame({
+            "Medication": meds_in_model,
+            "PropensityScore": probs
+        }).sort_values("PropensityScore", ascending=False)
