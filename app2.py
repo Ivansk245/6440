@@ -44,44 +44,81 @@ def get_trained_models():
 
 tier_models, df, meds_seen = get_trained_models()
 
-diagnosis_input = st.text_input("Enter your diagnosis (e.g., hypertension):").strip()
+diagnosis_input = st.text_input("Enter your diagnosis (e.g., hypertension):").strip().lower()
 
 if diagnosis_input != st.session_state.diagnosis:
     st.session_state.diagnosis = diagnosis_input
     st.session_state.meds = get_medications_from_csv(diagnosis_input)
 
 meds = st.session_state.meds
-st.write(f"Found {len(meds)} medications for `{diagnosis_input}`")
+#st.write(f"Found {len(meds)} medications for `{diagnosis_input}`")
 if meds:
-    st.write(meds)
+    #st.write(meds)
+    st.write(f"Found {len(meds)} medications for `{diagnosis_input}`")
 else:
     st.warning(f"No medications found for `{diagnosis_input}`. Please check your spelling or try another diagnosis.")
 
 if meds:
     st.subheader("Patient Characteristics")
     age = st.number_input("Age", min_value=0, max_value=120, value=30)
-    sex = st.selectbox("Sex", ["Male", "Female", "Other"])
-    num_conditions = st.number_input("Number of known conditions", min_value=0, max_value=20, value=0)
+    sex = st.selectbox("Sex", ["Male", "Female"])
+    #num_conditions = st.number_input("Number of known conditions", min_value=0, max_value=20, value=0)
 
-    sex_map = {"Male": 0, "Female": 1, "Other": 0.5}
-    patient_features = [age, sex_map[sex], num_conditions]
+    sex_map = {"Male": 0, "Female": 1}
+    #patient_features = [age, sex_map[sex], num_conditions]
+    patient_features = [age, sex_map[sex]]
 
     results = predict_propensity(diagnosis_input, patient_features, tier_models)
     if results is not None:
         st.session_state.results = results
     else:
         st.warning("No model available for this diagnosis.")
+    
+    if "selected_chart" not in st.session_state:
+        st.session_state.selected_chart = "Bar Chart" 
 
-    if not results.empty:
-        st.subheader("Propensity Scores")
-        chart = alt.Chart(results).mark_bar().encode(
-            x=alt.X('PropensityScore', title='Propensity Score'),
-            y=alt.Y('Medication', sort='-x', title='Medication')
-        )
-        st.altair_chart(chart, use_container_width=True)
+    st.subheader("Propensity Scores")
+    col1, col2, col3 = st.columns(3)
 
-        st.subheader("Detailed Scores")
-        st.dataframe(results)
+    with col1:
+        if st.button("Bar Chart"):
+            st.session_state.selected_chart = "Bar Chart"
+    with col2:
+        if st.button("Stacked Bar Chart"):
+            st.session_state.selected_chart = "Stacked Bar Chart"
+    with col3:
+        if st.button("Pie Chart"):
+            st.session_state.selected_chart = "Pie Chart"
+
+    df_results = st.session_state.results
+
+    bar_chart = alt.Chart(df_results).mark_bar().encode(
+        x='PropensityScore',
+        y=alt.Y('Medication', sort='-x'),
+        color=alt.Color('PropensityScore', scale=alt.Scale(scheme='blues'))
+    )
+
+    stacked_bar = alt.Chart(df_results).mark_bar().encode(
+        x=alt.X('Patient:N', title='Patient'),
+        y=alt.Y('PropensityScore:Q', title='Propensity Score'),
+        color=alt.Color('Medication:N', title='Medication'),
+        tooltip=['Medication', 'PropensityScore']
+    ).properties(width=600,height=400)
+
+    pie_chart = alt.Chart(df_results).mark_arc(innerRadius=0).encode(
+        theta='PropensityScore',
+        color='Medication'
+    )
+
+    if st.session_state.selected_chart == "Bar Chart":
+        st.altair_chart(bar_chart, use_container_width=True)
+    elif st.session_state.selected_chart == "Stacked Bar Chart":
+        st.altair_chart(stacked_bar, use_container_width=True)
+    elif st.session_state.selected_chart == "Pie Chart":
+        st.altair_chart(pie_chart, use_container_width=True)
+
+    st.subheader("Detailed Scores")
+    st.dataframe(df_results)
 
 logo1 = os.path.join(BASE_DIR, "gatech.png")
 logo2 = os.path.join(BASE_DIR, "synthea.png")

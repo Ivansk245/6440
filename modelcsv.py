@@ -17,8 +17,9 @@ def extract_features_from_patient_row(patient_row):
     sex_str = str(patient_row.get("GENDER", "other")).lower()
     sex = sex_map.get(sex_str, 0.5)
 
-    n_conditions = patient_row.get("num_conditions", 0)
-    return [age, sex, n_conditions]
+    #n_conditions = patient_row.get("num_conditions", 0)
+    #return [age, sex, n_conditions]
+    return [age, sex]
 
 def train_models_from_csv(patients_csv="patients.csv", medications_csv="medications.csv"):
     """Train tiered models for each diagnosis."""
@@ -47,6 +48,8 @@ def train_models_from_csv(patients_csv="patients.csv", medications_csv="medicati
                 tier_models[diagnosis] = {"type": "model", "model": model}
             except ValueError:
                 tier_models[diagnosis] = {"type": "frequency", "counts": meds_counts.to_dict()}
+    
+    tier_models = {k.strip().lower(): v for k, v in tier_models.items()}
 
     return tier_models, merged_df, list(meds_seen)
 
