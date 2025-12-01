@@ -3,7 +3,6 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 def extract_features_from_patient_row(patient_row):
-    """Extract features [age, sex, num_conditions] from a patient row."""
     birthDate = patient_row.get("BIRTHDATE", "2000-01-01")
     try:
         birth_date_parsed = pd.to_datetime(birthDate)
@@ -13,7 +12,13 @@ def extract_features_from_patient_row(patient_row):
 
     age = pd.Timestamp.now().year - birth_year
 
-    sex_map = {"male": 0, "female": 1}
+    sex_map = {
+    "male": 0,
+    "m": 0,
+    "female": 1,
+    "f": 1
+    }
+
     sex_str = str(patient_row.get("GENDER", "other")).lower()
     sex = sex_map.get(sex_str, 0.5)
 
@@ -21,15 +26,17 @@ def extract_features_from_patient_row(patient_row):
     #return [age, sex, n_conditions]
     return [age, sex]
 
-def train_models_from_csv(patients_csv="patients.csv", medications_csv="medications.csv"):
-    """Train tiered models for each diagnosis."""
+#def train_models_from_csv(patients_csv="patients.csv", medications_csv="medications.csv"):
+def train_models_from_csv(patients_csv, medications_csv, diagnosis_count):
     patients_df = pd.read_csv(patients_csv)
     meds_df = pd.read_csv(medications_csv)
+    meds_df = meds_df.drop_duplicates(subset=["PATIENT", "DESCRIPTION", "REASONDESCRIPTION"])
 
     tier_models = {}
     meds_seen = set()
 
     merged_df = meds_df.merge(patients_df, on="PATIENT", how="left")
+    merged_df = merged_df.drop_duplicates(subset=["PATIENT", "DESCRIPTION", "REASONDESCRIPTION"])
 
     for diagnosis, group in merged_df.groupby("REASONDESCRIPTION"):
         meds_counts = group["DESCRIPTION"].value_counts()
@@ -37,7 +44,7 @@ def train_models_from_csv(patients_csv="patients.csv", medications_csv="medicati
 
         if len(meds_counts) == 1:
             tier_models[diagnosis] = {"type": "single", "med": meds_counts.index[0]}
-        elif meds_counts.max() < 100:
+        elif meds_counts.max() < diagnosis_count:
             tier_models[diagnosis] = {"type": "frequency", "counts": meds_counts.to_dict()}
         else:
             X = np.array([extract_features_from_patient_row(row) for _, row in group.iterrows()])
@@ -54,7 +61,6 @@ def train_models_from_csv(patients_csv="patients.csv", medications_csv="medicati
     return tier_models, merged_df, list(meds_seen)
 
 def predict_propensity(diagnosis, patient_features, tier_models):
-    """Predict propensity scores for a given diagnosis and patient."""
     if diagnosis not in tier_models:
         return None
 
@@ -80,3 +86,37 @@ def predict_propensity(diagnosis, patient_features, tier_models):
             "Medication": meds_in_model,
             "PropensityScore": probs
         }).sort_values("PropensityScore", ascending=False)
+
+def find_matching_diagnoses(user_input, tier_models):
+    user_input = user_input.lower().strip()
+    matches = [diag for diag in tier_models.keys() if user_input in diag]
+    return matches
+
+def predict_combined_propensity(user_input, patient_features, tier_models):
+    matching_diags = find_matching_diagnoses(user_input, tier_models)
+    if not matching_diags:
+        return None
+
+    all_results = []
+
+    for diag in matching_diags:
+        tier = tier_models[diag]
+
+        if tier["type"] == "single":
+            all_results.append({"Medication": tier["med"], "PropensityScore": 1.0})
+        elif tier["type"] == "frequency":
+            counts = tier["counts"]
+            total = sum(counts.values())
+            for med, count in counts.items():
+                all_results.append({"Medication": med, "PropensityScore": count / total})
+        else:  
+            model = tier["model"]
+            meds_in_model = model.classes_
+            probs = model.predict_proba([patient_features])[0]
+            for med, prob in zip(meds_in_model, probs):
+                all_results.append({"Medication": med, "PropensityScore": prob})
+
+    df = pd.DataFrame(all_results)
+    df = df.groupby("Medication", as_index=False).sum()  
+    df["PropensityScore"] = df["PropensityScore"] / df["PropensityScore"].sum()  
+    return df.sort_values("PropensityScore", ascending=False)
